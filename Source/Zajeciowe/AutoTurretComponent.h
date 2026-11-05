@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "TimerManager.h"
+
+
 #include "AutoTurretComponent.generated.h"
 
 
@@ -44,7 +47,7 @@ protected:
 	float RotationSpeed = 10.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Turret", BlueprintReadWrite)
-	float Damage = 5.0f;
+	USoundBase* FireSound;
 
 private:
 	UPROPERTY()
@@ -53,7 +56,7 @@ private:
 	UPROPERTY()
 	USceneComponent* MuzzlePoint = nullptr;
 
-	float TimeSinceLastShot = 0.0f;
 	bool HasLineOfSight(AActor* Target) const;
 	void Fire();
+	float LastShotTime = -1.0f;
 };

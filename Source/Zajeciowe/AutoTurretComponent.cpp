@@ -5,6 +5,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "EngineUtils.h"
 
 // Sets default values for this component's properties
 UAutoTurretComponent::UAutoTurretComponent()
@@ -22,8 +23,6 @@ void UAutoTurretComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
-	
 }
 
 
@@ -32,8 +31,10 @@ void UAutoTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	TimeSinceLastShot += DeltaTime;
-	if (!TurretRotationPart || !MuzzlePoint || !BulletClass) return;
+	if (!TurretRotationPart || !MuzzlePoint || !BulletClass)
+	{
+		return;
+	}
 
 	AActor* Player = UGameplayStatics::GetPlayerPawn(this, 0);
 
@@ -43,6 +44,7 @@ void UAutoTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	}
 
 	const float Distance = FVector::Dist(GetOwner()->GetActorLocation(), Player->GetActorLocation());
+	
 	if (Distance > Range)
 	{
 		return;
@@ -63,12 +65,17 @@ void UAutoTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	const float YawDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(NewRotation.Yaw, TargetRotation.Yaw));
 	const float PitchDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(NewRotation.Pitch, TargetRotation.Pitch));
 
-	const float FireInterval = 1.0f / FireRate;
+	if (YawDiff >= 5.0f || PitchDiff >= 5.0f)
+	{
+		return;
+	}
 
-	if (YawDiff < 5.0f && PitchDiff < 5.0f && TimeSinceLastShot >= FireInterval)
+	const float FireInterval = 1.0f / FMath::Max(FireRate, 0.01f);
+	const float Now = GetWorld()->GetTimeSeconds();
+
+	if (Now - LastShotTime >= FireInterval)
 	{
 		Fire();
-		TimeSinceLastShot = 0.0f;
 	}
 }
 
@@ -79,11 +86,17 @@ void UAutoTurretComponent::Initialize(USceneComponent* InTurretRotationPart, USc
 	MuzzlePoint = InMuzzlePoint;
 }
 
+
 bool UAutoTurretComponent::HasLineOfSight(AActor* Target) const
 {
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(GetOwner());
+
+	for (TActorIterator<AActor> It(GetWorld(), BulletClass); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
 
 	const FVector Start = MuzzlePoint->GetComponentLocation();
 	const FVector End = Target->GetActorLocation();
@@ -93,11 +106,21 @@ bool UAutoTurretComponent::HasLineOfSight(AActor* Target) const
 	return bHit && Hit.GetActor() == Target;
 }
 
+
 void UAutoTurretComponent::Fire()
 {
+	const float CurrentTime = GetWorld()->GetTimeSeconds();
+
+	LastShotTime = CurrentTime;
+
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.Owner = GetOwner();
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	GetWorld()->SpawnActor<AActor>(BulletClass, MuzzlePoint->GetComponentLocation(), MuzzlePoint->GetComponentRotation(), SpawnParams);
+
+	if (FireSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, MuzzlePoint->GetComponentLocation(), MuzzlePoint->GetComponentRotation());
+	}
 }
